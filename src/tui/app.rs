@@ -730,21 +730,18 @@ impl App {
         }
     }
 
-    /// Initialize graphics protocol picker with environment-based protocol detection.
+    /// Initialize graphics protocol picker with stdio protocol detection.
     ///
-    /// Checks environment variables (TERM_PROGRAM, KITTY_WINDOW_ID, etc.) to
-    /// detect the best image protocol, then queries stdio for font/cell dimensions.
-    /// Falls back to halfblocks if nothing better is available.
+    /// Ratatui-image's stdio query is authoritative because terminal environment
+    /// variables can be stale in tmux or remote sessions. Environment hints are
+    /// only used when the query returns no capabilities at all.
     fn init_picker() -> Option<ratatui_image::picker::Picker> {
         use ratatui_image::picker::Picker;
 
-        let env_protocol = Self::detect_image_protocol();
-
-        // Query stdio for accurate font/cell dimensions, then override protocol
         let mut picker = match Picker::from_query_stdio() {
             Ok(picker) => {
-                let (w, h) = picker.font_size();
-                if w < 4 || h < 4 {
+                let font_size = picker.font_size();
+                if font_size.width < 4 || font_size.height < 4 {
                     Picker::halfblocks()
                 } else {
                     picker
@@ -753,30 +750,50 @@ impl App {
             Err(_) => Picker::halfblocks(),
         };
 
-        // Override detected protocol with environment-based detection
-        if let Some(protocol) = env_protocol {
+        if Self::should_use_env_protocol_fallback(&picker)
+            && let Some(protocol) = Self::detect_image_protocol_fallback()
+        {
             picker.set_protocol_type(protocol);
         }
 
         Some(picker)
     }
 
-    /// Detect the best image protocol from environment variables.
-    ///
-    /// Returns None if no specific protocol is detected (use stdio detection).
-    fn detect_image_protocol() -> Option<ratatui_image::picker::ProtocolType> {
+    fn should_use_env_protocol_fallback(picker: &ratatui_image::picker::Picker) -> bool {
         use ratatui_image::picker::ProtocolType;
 
-        // Kitty graphics protocol
-        if std::env::var("KITTY_WINDOW_ID").is_ok() {
-            return Some(ProtocolType::Kitty);
+        picker.protocol_type() == ProtocolType::Halfblocks && picker.capabilities().is_empty()
+    }
+
+    /// Detect an image protocol fallback from environment variables.
+    ///
+    /// Returns None if no specific fallback is detected or if the terminal is
+    /// known to report buggy graphics support.
+    fn detect_image_protocol_fallback() -> Option<ratatui_image::picker::ProtocolType> {
+        use ratatui_image::picker::ProtocolType;
+
+        if std::env::var("KONSOLE_VERSION").is_ok_and(|value| !value.is_empty()) {
+            return None;
         }
 
-        // iTerm2 / WezTerm inline images protocol
-        if let Ok(term_program) = std::env::var("TERM_PROGRAM")
-            && (term_program == "iTerm.app" || term_program == "WezTerm")
+        if std::env::var("TERM_PROGRAM").is_ok_and(|term_program| {
+            term_program.contains("iTerm")
+                || term_program.contains("WezTerm")
+                || term_program.contains("mintty")
+                || term_program.contains("vscode")
+                || term_program.contains("Tabby")
+                || term_program.contains("Hyper")
+                || term_program.contains("rio")
+                || term_program.contains("Bobcat")
+                || term_program.contains("WarpTerminal")
+        }) || std::env::var("WEZTERM_EXECUTABLE").is_ok_and(|value| !value.is_empty())
         {
             return Some(ProtocolType::Iterm2);
+        }
+
+        // Kitty graphics protocol
+        if std::env::var("KITTY_WINDOW_ID").is_ok_and(|value| !value.is_empty()) {
+            return Some(ProtocolType::Kitty);
         }
 
         // Ghostty uses Kitty protocol
@@ -868,8 +885,12 @@ impl App {
 
         // Use picker's actual font width for accurate pixel calculation
         let font_width = self.picker.as_ref().map_or(8u16, |p| {
-            let (w, _) = p.font_size();
-            if w < 1 { 8 } else { w }
+            let font_size = p.font_size();
+            if font_size.width < 1 {
+                8
+            } else {
+                font_size.width
+            }
         });
         let target_px = (width as u32) * (font_width as u32);
 
@@ -895,8 +916,12 @@ impl App {
                 let dims = (img.width(), img.height());
                 if let Some(picker) = self.picker.as_mut() {
                     let font_h = {
-                        let (_, h) = picker.font_size();
-                        if h < 1 { 16u32 } else { h as u32 }
+                        let font_size = picker.font_size();
+                        if font_size.height < 1 {
+                            16u32
+                        } else {
+                            font_size.height as u32
+                        }
                     };
                     let rows = dims.1.div_ceil(font_h) as usize;
                     let protocol = picker.new_resize_protocol(img);
@@ -5568,5 +5593,26 @@ mod palette_tests {
             .max_by_key(|c| c.match_score(q))
             .expect("non-empty");
         assert_eq!(best.action, CommandAction::Quit);
+    }
+}
+
+#[cfg(test)]
+mod image_picker_tests {
+    use super::*;
+    use ratatui_image::picker::{Picker, ProtocolType};
+
+    #[test]
+    fn env_protocol_fallback_is_allowed_for_empty_halfblock_picker() {
+        let picker = Picker::halfblocks();
+
+        assert!(App::should_use_env_protocol_fallback(&picker));
+    }
+
+    #[test]
+    fn env_protocol_fallback_does_not_override_image_protocol() {
+        let mut picker = Picker::halfblocks();
+        picker.set_protocol_type(ProtocolType::Kitty);
+
+        assert!(!App::should_use_env_protocol_fallback(&picker));
     }
 }

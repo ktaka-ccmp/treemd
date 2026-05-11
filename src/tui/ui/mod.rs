@@ -642,8 +642,8 @@ fn render_mermaid_images(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Font cell size in pixels, used for centering calculations
     let font_size = app.picker.as_ref().map_or((8u32, 16u32), |p| {
-        let (fw, fh) = p.font_size();
-        (fw as u32, fh as u32)
+        let font_size = p.font_size();
+        (font_size.width as u32, font_size.height as u32)
     });
 
     let selected_code_id = if app.mode == crate::tui::app::AppMode::Interactive {
@@ -902,7 +902,7 @@ fn render_image_modal(frame: &mut Frame, app: &mut App, area: Rect) {
         // Calculate image area
         let resize = Resize::Scale(Some(FilterType::Triangle));
 
-        let image_size = protocol_state.size_for(resize.clone(), inner_area);
+        let image_size = protocol_state.size_for(resize.clone(), inner_area.as_size());
         let image_area = Rect {
             x: inner_area.x + (inner_area.width.saturating_sub(image_size.width)) / 2,
             y: inner_area.y + (inner_area.height.saturating_sub(image_size.height)) / 2,

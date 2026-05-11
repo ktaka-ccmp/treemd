@@ -52,6 +52,14 @@ fn redirect_state() -> &'static Mutex<Option<StdinRedirect>> {
     STDIN_REDIRECT.get_or_init(|| Mutex::new(None))
 }
 
+#[cfg(unix)]
+fn stdin_redirect_active() -> bool {
+    redirect_state()
+        .lock()
+        .map(|guard| guard.is_some())
+        .unwrap_or(false)
+}
+
 /// Open `/dev/tty` and dup it onto fd 0, saving the original stdin so it can
 /// be restored at shutdown. Idempotent — does nothing if already redirected.
 #[cfg(unix)]
@@ -128,12 +136,14 @@ fn restore_stdin_redirect() {
 /// shutdown.
 #[cfg(unix)]
 pub fn enable_raw_mode() -> io::Result<()> {
-    if stdin_is_tty() {
+    if stdin_is_tty() && !stdin_redirect_active() {
         return crossterm::terminal::enable_raw_mode();
     }
 
-    // Stdin is piped — point fd 0 at /dev/tty for the rest of the session.
-    redirect_stdin_to_tty_once()?;
+    if !stdin_redirect_active() {
+        // Stdin is piped — point fd 0 at /dev/tty for the rest of the session.
+        redirect_stdin_to_tty_once()?;
+    }
 
     // Now read termios from fd 0 (which is /dev/tty) and put it in raw mode.
     let mut orig_termios = MaybeUninit::<libc::termios>::uninit();
@@ -156,23 +166,13 @@ pub fn enable_raw_mode() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(unix))]
-pub fn enable_raw_mode() -> io::Result<()> {
-    crossterm::terminal::enable_raw_mode()
-}
-
-/// Disable raw mode and restore the original stdin (if it was redirected).
 #[cfg(unix)]
-pub fn disable_raw_mode() -> io::Result<()> {
-    if stdin_is_tty() {
-        return crossterm::terminal::disable_raw_mode();
-    }
-
-    // Restore termios on fd 0 (currently /dev/tty), then swap fd 0 back to
-    // the original stdin.
+fn restore_tty_mode() -> io::Result<()> {
     unsafe {
         if let Some(orig) = SAVED_TERMIOS.get() {
-            libc::tcsetattr(0, libc::TCSANOW, orig);
+            if libc::tcsetattr(0, libc::TCSANOW, orig) != 0 {
+                return Err(io::Error::last_os_error());
+            }
         } else {
             // Fallback: best-effort restoration of canonical mode.
             let mut termios = MaybeUninit::<libc::termios>::uninit();
@@ -181,11 +181,31 @@ pub fn disable_raw_mode() -> io::Result<()> {
                 termios.c_lflag |= libc::ICANON | libc::ECHO | libc::ISIG | libc::IEXTEN;
                 termios.c_iflag |= libc::ICRNL | libc::IXON;
                 termios.c_oflag |= libc::OPOST;
-                libc::tcsetattr(0, libc::TCSANOW, &termios);
+                if libc::tcsetattr(0, libc::TCSANOW, &termios) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
             }
         }
     }
 
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub fn enable_raw_mode() -> io::Result<()> {
+    crossterm::terminal::enable_raw_mode()
+}
+
+/// Disable raw mode and restore the original stdin (if it was redirected).
+#[cfg(unix)]
+pub fn disable_raw_mode() -> io::Result<()> {
+    if !stdin_redirect_active() {
+        return crossterm::terminal::disable_raw_mode();
+    }
+
+    // Restore termios on fd 0 (currently /dev/tty), then swap fd 0 back to
+    // the original stdin.
+    restore_tty_mode()?;
     restore_stdin_redirect();
     Ok(())
 }
@@ -193,6 +213,35 @@ pub fn disable_raw_mode() -> io::Result<()> {
 #[cfg(not(unix))]
 pub fn disable_raw_mode() -> io::Result<()> {
     crossterm::terminal::disable_raw_mode()
+}
+
+/// Temporarily leave raw mode without undoing the stdin-to-/dev/tty redirect.
+///
+/// This is used before launching an external editor. The child process should
+/// inherit `/dev/tty` as stdin, but the terminal must be back in canonical mode.
+#[cfg(unix)]
+pub fn suspend_raw_mode() -> io::Result<()> {
+    if stdin_redirect_active() {
+        restore_tty_mode()
+    } else {
+        crossterm::terminal::disable_raw_mode()
+    }
+}
+
+#[cfg(not(unix))]
+pub fn suspend_raw_mode() -> io::Result<()> {
+    crossterm::terminal::disable_raw_mode()
+}
+
+/// Re-enter raw mode after [`suspend_raw_mode`].
+#[cfg(unix)]
+pub fn resume_raw_mode() -> io::Result<()> {
+    enable_raw_mode()
+}
+
+#[cfg(not(unix))]
+pub fn resume_raw_mode() -> io::Result<()> {
+    crossterm::terminal::enable_raw_mode()
 }
 
 /// Best-effort terminal restore: leave alternate screen and disable raw mode.

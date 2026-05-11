@@ -23,7 +23,6 @@ use crossterm::ExecutableCommand;
 use crossterm::event::{KeyCode, MouseEvent, MouseEventKind};
 use crossterm::terminal::{
     BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen,
-    disable_raw_mode, enable_raw_mode,
 };
 use opensesame::{Editor, EditorConfig};
 use ratatui::DefaultTerminal;
@@ -43,7 +42,7 @@ fn run_editor(
 ) -> Result<()> {
     // Leave alternate screen and disable raw mode to give editor full terminal control
     stdout().execute(LeaveAlternateScreen)?;
-    disable_raw_mode()?;
+    tty::suspend_raw_mode()?;
 
     // Build editor command with config
     let mut builder = Editor::builder()
@@ -58,7 +57,7 @@ fn run_editor(
 
     // Restore terminal state
     stdout().execute(EnterAlternateScreen)?;
-    enable_raw_mode()?;
+    tty::resume_raw_mode()?;
     terminal.clear()?;
 
     result.map_err(|e| color_eyre::eyre::eyre!("{}", e))

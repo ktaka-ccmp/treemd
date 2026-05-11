@@ -7,10 +7,9 @@ use crate::parser::output::Alignment;
 use crate::tui::theme::Theme;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 
 use crate::tui::ui::format_inline_markdown;
-use crate::tui::ui::util::{align_text, wrap_text};
+use crate::tui::ui::util::{align_text, terminal_width, wrap_text};
 
 /// Context for rendering a table row
 pub struct TableRenderContext<'a> {
@@ -34,7 +33,7 @@ fn calculate_column_widths(headers: &[String], rows: &[Vec<String>]) -> Vec<usiz
 
     if rows.is_empty() {
         // No data rows, use header widths
-        return headers.iter().map(|h| h.width().max(1)).collect();
+        return headers.iter().map(|h| terminal_width(h).max(1)).collect();
     }
 
     let mut col_widths: Vec<usize> = vec![0; col_count];
@@ -48,7 +47,7 @@ fn calculate_column_widths(headers: &[String], rows: &[Vec<String>]) -> Vec<usiz
 
         for row in rows {
             if let Some(cell) = row.get(i) {
-                let cell_width = cell.width();
+                let cell_width = terminal_width(cell);
                 total_width += cell_width;
                 cell_count += 1;
                 max_width = max_width.max(cell_width);
@@ -62,7 +61,7 @@ fn calculate_column_widths(headers: &[String], rows: &[Vec<String>]) -> Vec<usiz
         }
 
         // Ensure column is at least as wide as header
-        col_widths[i] = col_widths[i].max(headers[i].width()).max(1);
+        col_widths[i] = col_widths[i].max(terminal_width(&headers[i])).max(1);
     }
 
     col_widths
@@ -373,7 +372,8 @@ pub fn render_table_row(
             if !is_selected && line_text.contains('`') {
                 // Render inline code spans with theme styling
                 let formatted = format_inline_markdown(&line_text, ctx.theme);
-                let rendered_width: usize = formatted.iter().map(|s| s.content.width()).sum();
+                let rendered_width: usize =
+                    formatted.iter().map(|s| terminal_width(&s.content)).sum();
                 let padding_total = width.saturating_sub(rendered_width);
                 let (lead, trail) = match alignment {
                     Alignment::Right => (padding_total, 0),
@@ -537,6 +537,33 @@ mod tests {
 
             // Should have: top border, header, separator, bottom border = 4 lines
             assert_eq!(lines.len(), 4);
+        }
+
+        #[test]
+        fn test_halfwidth_katakana_table_widths_match_terminal_cells() {
+            let theme = test_theme();
+            let headers = vec!["Kana".to_string()];
+            let rows = vec![vec!["ｶﾞ".to_string()], vec!["ﾊﾟ".to_string()]];
+
+            let lines = render_table(
+                &headers,
+                &[Alignment::Left],
+                &rows,
+                &theme,
+                false,
+                false,
+                None,
+                Some(8),
+            );
+
+            for line in lines {
+                let width: usize = line
+                    .spans
+                    .iter()
+                    .map(|span| terminal_width(&span.content))
+                    .sum();
+                assert!(width <= 8, "line is {width} cells wide: {line:?}");
+            }
         }
 
         #[test]

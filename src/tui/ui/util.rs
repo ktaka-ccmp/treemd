@@ -8,6 +8,40 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+const HALFWIDTH_KATAKANA_VOICED_SOUND_MARK: char = '\u{FF9E}';
+const HALFWIDTH_KATAKANA_SEMI_VOICED_SOUND_MARK: char = '\u{FF9F}';
+
+/// Return the width a terminal is expected to use for text.
+///
+/// `unicode-width` treats halfwidth Katakana dakuten/handakuten as combining
+/// marks, but terminals commonly render U+FF9E/U+FF9F as one cell. Ratatui's
+/// current buffer diffing has the same adjustment, so table layout should use
+/// it too.
+pub fn terminal_width(text: &str) -> usize {
+    text.width()
+        + text
+            .chars()
+            .filter(|c| {
+                matches!(
+                    *c,
+                    HALFWIDTH_KATAKANA_VOICED_SOUND_MARK
+                        | HALFWIDTH_KATAKANA_SEMI_VOICED_SOUND_MARK
+                )
+            })
+            .count()
+}
+
+fn terminal_char_width(c: char) -> usize {
+    if matches!(
+        c,
+        HALFWIDTH_KATAKANA_VOICED_SOUND_MARK | HALFWIDTH_KATAKANA_SEMI_VOICED_SOUND_MARK
+    ) {
+        1
+    } else {
+        c.width().unwrap_or(1)
+    }
+}
+
 /// Calculate a popup area with minimum size constraints.
 ///
 /// Returns a `Rect` that is centered within the parent area, sized as a
@@ -88,7 +122,7 @@ pub fn detect_checkbox_in_text(text: &str) -> (bool, bool, &str) {
 /// A string padded to the specified width with appropriate alignment.
 pub fn align_text(text: &str, width: usize, alignment: &Alignment) -> String {
     // Use Unicode display width instead of character/byte length
-    let text_width = text.width();
+    let text_width = terminal_width(text);
 
     // If text is longer than width, truncate it
     if text_width >= width {
@@ -100,7 +134,7 @@ pub fn align_text(text: &str, width: usize, alignment: &Alignment) -> String {
             let mut truncated = String::new();
             let mut current_width = 0;
             for c in text.chars() {
-                let char_width = c.width().unwrap_or(1);
+                let char_width = terminal_char_width(c);
                 if current_width + char_width > available {
                     break;
                 }
@@ -115,7 +149,7 @@ pub fn align_text(text: &str, width: usize, alignment: &Alignment) -> String {
         let mut truncated = String::new();
         let mut current_width = 0;
         for c in text.chars() {
-            let char_width = c.width().unwrap_or(1);
+            let char_width = terminal_char_width(c);
             if current_width + char_width > width {
                 break;
             }
@@ -657,7 +691,7 @@ pub fn wrap_text(text: &str, width: usize) -> Vec<String> {
     let mut current_width = 0;
 
     for word in text.split_whitespace() {
-        let word_width = word.width();
+        let word_width = terminal_width(word);
 
         // If word itself is wider than limit, we must break it
         if word_width > width {
@@ -672,7 +706,7 @@ pub fn wrap_text(text: &str, width: usize) -> Vec<String> {
                 let mut chunk = String::new();
                 let mut chunk_width = 0;
                 for c in remaining.chars() {
-                    let c_width = c.width().unwrap_or(1);
+                    let c_width = terminal_char_width(c);
                     if chunk_width + c_width > width {
                         break;
                     }
@@ -1161,6 +1195,13 @@ mod tests {
         use super::*;
 
         #[test]
+        fn test_halfwidth_katakana_sound_marks_match_terminal_width() {
+            assert_eq!(terminal_width("ｶﾞ"), 2);
+            assert_eq!(terminal_width("ﾊﾟ"), 2);
+            assert_eq!(terminal_width("aﾞ"), 2);
+        }
+
+        #[test]
         fn test_left_align() {
             let result = align_text("Hi", 10, &Alignment::Left);
             assert_eq!(result, " Hi       ");
@@ -1207,7 +1248,13 @@ mod tests {
             let result = align_text("日本", 10, &Alignment::Left);
             // "日本" is 4 columns wide (2 chars * 2 width each)
             // Result should be " 日本     " (1 space + 4 cols + 5 spaces = 10)
-            assert_eq!(result.width(), 10);
+            assert_eq!(terminal_width(&result), 10);
+        }
+
+        #[test]
+        fn test_align_halfwidth_katakana_sound_marks() {
+            let result = align_text("ｶﾞ", 6, &Alignment::Left);
+            assert_eq!(terminal_width(&result), 6);
         }
 
         #[test]

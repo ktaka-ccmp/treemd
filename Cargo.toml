@@ -45,7 +45,7 @@ crossterm = "0.29"
 color-eyre = "0.6"
 
 # Image rendering in TUI
-ratatui-image = { version = "10", default-features = false, features = ["crossterm", "image-defaults"] }
+ratatui-image = { version = "11", default-features = false, features = ["crossterm", "image-defaults"] }
 image = "0.25"
 gif = "0.14"
 
