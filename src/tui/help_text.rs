@@ -175,6 +175,11 @@ pub const HELP_LINES: &[HelpLine] = &[
     ),
     keybinding(Normal, &[OpenFilePicker], "Open file picker"),
     keybinding(Normal, &[ToggleRawSource], "Toggle raw source view"),
+    keybinding(
+        Normal,
+        &[ToggleMouseCapture],
+        "Toggle mouse capture (off to select/copy text)",
+    ),
     keybinding(Normal, &[ToggleHelp], "Toggle this help"),
     keybinding(Normal, &[Quit], "Quit"),
     blank(),
@@ -269,6 +274,11 @@ pub const HELP_LINES: &[HelpLine] = &[
         InteractiveTable,
         &[InteractiveActivate],
         "Edit table cell (in table mode)",
+    ),
+    keybinding(
+        InteractiveTable,
+        &[CopyTableCell, CopyTableRow, CopyTableMarkdown],
+        "Copy cell / row / table as markdown",
     ),
     keybinding(InteractiveTable, &[ExitMode], "Exit table navigation"),
     blank(),

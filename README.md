@@ -58,6 +58,7 @@ Use it to:
 | **Syntax highlighting** | 50+ languages via [syntect](https://crates.io/crates/syntect) |
 | **Vim-style navigation** | `j`/`k`, `g`/`G`, `d`/`u`, `p` (parent) |
 | **Search & filter** | Filter headings (`s`) or search content (`/`) with `n`/`N` navigation |
+| **Command palette** | Fuzzy-search every command with `:`—no need to memorize keys |
 | **Collapsible tree** | Expand/collapse sections with `Space`/`Enter` |
 | **Bookmarks** | Mark positions (`m`) and jump back (`'`) |
 | **8 color themes** | Nord, Dracula, Solarized, Monokai, Gruvbox, Tokyo Night, Catppuccin Mocha, Ocean Dark |
@@ -135,8 +136,9 @@ treemd *.md             # Open file picker with matched files
 | `g` / `G` or `Home` / `End` | Jump to top/bottom |
 | `p` | Jump to parent heading |
 | `d` / `u` or `PageDown` / `PageUp` | Page down/up |
-| `Tab` | Switch focus between outline and content |
+| `Tab` / `Shift+Tab` | Switch focus between outline and content |
 | `1`-`9` | Jump to heading by number |
+| `5j` etc. | Repeat motion with a vim count prefix |
 
 </details>
 
@@ -150,6 +152,7 @@ treemd *.md             # Open file picker with matched files
 | `w` | Toggle outline visibility |
 | `[` / `]` | Adjust outline width (20%, 30%, 40%) |
 | `#` | Toggle heading level markers in outline |
+| `T` | Filter outline by open todos |
 
 </details>
 
@@ -210,10 +213,16 @@ treemd *.md             # Open file picker with matched files
 </details>
 
 <details>
-<summary><strong>Editing & System</strong></summary>
+<summary><strong>Commands & System</strong></summary>
 
 | Key | Action |
 |-----|--------|
+| `:` | Open command palette (fuzzy-search commands) |
+| `o` / `Ctrl+o` | Open file picker |
+| `b` / `Backspace` | Go back in file history |
+| `F` (Shift+F) | Go forward in file history |
+| `r` | Toggle raw markdown source |
+| `M` | Toggle mouse capture (turn off to select text) |
 | `e` | Edit file in `$VISUAL` or `$EDITOR` |
 | `t` | Cycle color theme |
 | `y` | Copy current section |
@@ -224,6 +233,15 @@ treemd *.md             # Open file picker with matched files
 | `q` / `Esc` | Quit |
 
 </details>
+
+#### Selecting and copying text
+
+treemd captures the mouse for scroll-wheel navigation, which by default suppresses your terminal's native click-drag selection. To grab an arbitrary substring:
+
+- **Hold `Shift` while dragging** — most terminals (iTerm2, kitty, GNOME Terminal, Konsole, Windows Terminal) bypass application mouse capture and select natively.
+- **Press `M`** to release mouse capture entirely, then select and copy as usual; press `M` again to restore scroll-wheel navigation.
+
+For whole sections, `y` copies the current section straight to the clipboard without leaving treemd.
 
 ### CLI Mode (Non-Interactive)
 

@@ -78,6 +78,7 @@ pub enum CommandAction {
     ToggleHeadingMarkers,
     ToggleHelp,
     ToggleRawSource,
+    ToggleMouseCapture,
     JumpToTop,
     JumpToBottom,
     CollapseAll,
@@ -235,6 +236,12 @@ pub const PALETTE_COMMANDS: &[PaletteCommand] = &[
         &["raw", "source"],
         "Switch between rendered and raw markdown",
         CommandAction::ToggleRawSource,
+    ),
+    PaletteCommand::new(
+        "Toggle mouse capture",
+        &["mouse", "select", "selection"],
+        "Release the mouse so you can select and copy text natively",
+        CommandAction::ToggleMouseCapture,
     ),
     PaletteCommand::new(
         "Jump to top",
@@ -402,7 +409,12 @@ pub struct App {
     pub highlighter: SyntaxHighlighter,
     pub show_outline: bool,
     pub show_heading_markers: bool, // Show # prefixes in outline sidebar
-    pub outline_width: u16,         // Percentage: 20, 30, or 40
+    /// Whether terminal mouse capture is active. When on, the scroll wheel drives
+    /// navigation but the terminal's native click-drag text selection is disabled.
+    /// Toggling it off hands the mouse back to the terminal so text can be selected
+    /// and copied. Enabled at startup to match `main.rs`'s best-effort capture.
+    pub mouse_capture: bool,
+    pub outline_width: u16, // Percentage: 20, 30, or 40
     /// Whether the config file had a custom (non-standard) outline width at startup.
     /// Used to protect power users' custom config values from being overwritten.
     /// Standard values are 20, 30, 40; anything else is considered custom.
@@ -624,6 +636,7 @@ impl App {
             highlighter: SyntaxHighlighter::new(code_theme, code_theme_dir),
             show_outline: true,
             show_heading_markers: config.ui.outline_heading_markers,
+            mouse_capture: true,
             outline_width,
             config_has_custom_outline_width,
             bookmark_position: None,
@@ -1469,9 +1482,25 @@ impl App {
                     self.table_navigate_right();
                 }
             }
+            CopyTableCell => {
+                if let Err(e) = self.copy_table_cell() {
+                    self.set_status_message(&format!("✗ {}", e));
+                }
+            }
+            CopyTableRow => {
+                if let Err(e) = self.copy_table_row() {
+                    self.set_status_message(&format!("✗ {}", e));
+                }
+            }
+            CopyTableMarkdown => {
+                if let Err(e) = self.copy_table_markdown() {
+                    self.set_status_message(&format!("✗ {}", e));
+                }
+            }
 
             // === View ===
             ToggleRawSource => self.toggle_raw_source(),
+            ToggleMouseCapture => self.toggle_mouse_capture(),
             ToggleHelp => self.toggle_help(),
             ToggleThemePicker => self.toggle_theme_picker(),
             ApplyTheme => self.apply_selected_theme(),
@@ -3190,6 +3219,28 @@ impl App {
         self.set_status_message(&format!("Heading markers: {}", state));
     }
 
+    /// Toggle terminal mouse capture.
+    ///
+    /// With capture on, the scroll wheel drives navigation but the terminal
+    /// cannot perform native click-drag text selection. Turning it off releases
+    /// the mouse to the terminal so the user can select and copy arbitrary text;
+    /// turning it back on restores scroll-wheel navigation. Capture changes are
+    /// best-effort — terminals that reject the command simply keep their state.
+    pub fn toggle_mouse_capture(&mut self) {
+        use crossterm::ExecutableCommand;
+        use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+        use std::io::stdout;
+
+        self.mouse_capture = !self.mouse_capture;
+        if self.mouse_capture {
+            let _ = stdout().execute(EnableMouseCapture);
+            self.set_status_message("Mouse capture: ON (scroll navigation)");
+        } else {
+            let _ = stdout().execute(DisableMouseCapture);
+            self.set_status_message("Mouse capture: OFF (drag to select text)");
+        }
+    }
+
     /// Toggle filtering outline by open todos
     pub fn toggle_todo_filter(&mut self) {
         self.filter_by_todos = !self.filter_by_todos;
@@ -3429,6 +3480,10 @@ impl App {
             }
             CommandAction::ToggleHeadingMarkers => {
                 self.toggle_heading_markers();
+                false
+            }
+            CommandAction::ToggleMouseCapture => {
+                self.toggle_mouse_capture();
                 false
             }
             CommandAction::ToggleHelp => {

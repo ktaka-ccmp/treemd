@@ -101,10 +101,18 @@ pub enum Action {
     InteractiveLeft,
     /// Navigate right in table
     InteractiveRight,
+    /// Copy the selected table cell
+    CopyTableCell,
+    /// Copy the selected table row (tab-separated)
+    CopyTableRow,
+    /// Copy the entire table as markdown
+    CopyTableMarkdown,
 
     // === View ===
     /// Toggle raw markdown source view
     ToggleRawSource,
+    /// Toggle terminal mouse capture (off lets you select text natively)
+    ToggleMouseCapture,
     /// Toggle help popup
     ToggleHelp,
     /// Toggle theme picker
@@ -266,9 +274,13 @@ impl Action {
             Action::InteractivePreviousLink => "Previous link in element",
             Action::InteractiveLeft => "Navigate left (table)",
             Action::InteractiveRight => "Navigate right (table)",
+            Action::CopyTableCell => "Copy cell",
+            Action::CopyTableRow => "Copy row (tab-separated)",
+            Action::CopyTableMarkdown => "Copy table as markdown",
 
             // View
             Action::ToggleRawSource => "Toggle raw source view",
+            Action::ToggleMouseCapture => "Toggle mouse capture (text selection)",
             Action::ToggleHelp => "Toggle help",
             Action::ToggleThemePicker => "Open theme picker",
             Action::ApplyTheme => "Apply selected theme",
@@ -389,9 +401,13 @@ impl Action {
             | Action::InteractiveNextLink
             | Action::InteractivePreviousLink
             | Action::InteractiveLeft
-            | Action::InteractiveRight => "Interactive",
+            | Action::InteractiveRight
+            | Action::CopyTableCell
+            | Action::CopyTableRow
+            | Action::CopyTableMarkdown => "Interactive",
 
             Action::ToggleRawSource
+            | Action::ToggleMouseCapture
             | Action::ToggleHelp
             | Action::ToggleThemePicker
             | Action::ApplyTheme => "View",

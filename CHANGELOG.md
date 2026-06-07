@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-06-06
+
 ### Added
 
-- **Toggle heading markers in outline** - New `outline_heading_markers` config option, `#` keyboard shortcut, and `:toggle heading markers` palette command to show/hide `#`/`##`/`###` level prefixes in the outline sidebar (default: true)
+- **Toggle mouse capture for text selection** - New `M` shortcut and `:toggle mouse capture` palette command release the mouse so the terminal's native click-drag selection works for copying arbitrary text; toggle back to restore scroll-wheel navigation. The README also documents the `Shift`+drag bypass supported by most terminals
+- **Toggle heading markers in outline** - New `outline_heading_markers` config option, `#` keyboard shortcut, and `:toggle heading markers` palette command to show/hide `#`/`##`/`###` level prefixes in the outline sidebar (default: true) ([#57](https://github.com/Epistates/treemd/pull/57)) — thanks to [@alisaifee](https://github.com/alisaifee)
+
+### Fixed
+
+- **Table copy keys did nothing useful** - In interactive table mode `y`/`Y`/`r` had been silently rebound to generic copy/raw-source actions during the action-dispatch refactor, so cell, row, and copy-as-markdown copy were inoperative. Restored via dedicated `CopyTableCell`/`CopyTableRow`/`CopyTableMarkdown` actions wired to the existing handlers, with a regression test
+- **Inline backticks render as plain text** - Inline code in table cells/headers, headings, and blockquotes now renders as styled inline code via `format_inline_markdown()` instead of literal backticks ([#51](https://github.com/Epistates/treemd/issues/51), [#53](https://github.com/Epistates/treemd/pull/53)). Resolves the known issue carried in 0.5.11; requires `turbovault-parser` 1.5.0
+- **Navigation to duplicate headings** - Selecting an outline entry whose text appears multiple times always jumped to the first occurrence. `HeadingNode`/`OutlineItem` now carry a position index, and all content-extraction, selection-restore, and rendering paths resolve by index. `extract_section(text)` is preserved for the CLI `--section` flag, delegating to a new `extract_section_at_index()` ([#56](https://github.com/Epistates/treemd/pull/56)) — thanks to [@alisaifee](https://github.com/alisaifee)
+- **snake_case corruption in subscript rendering** - Terms like `i_am_a_snake` were mangled because `_x` was always treated as a LaTeX subscript. Subscript conversion now applies to `_{x}` unconditionally and to bare `_x` only when not mid-identifier ([#58](https://github.com/Epistates/treemd/pull/58)) — thanks to [@alisaifee](https://github.com/alisaifee)
+- **Mermaid image sizing and scrolling** - Mermaid diagrams now expand to fit terminal width and scroll correctly ([#53](https://github.com/Epistates/treemd/pull/53))
+
+### Changed
+
+- **Trimmed image format dependencies** - `ratatui-image` 10 → 11 (dropped `image-defaults`) and `image` now opts into only the needed decoders (`png`, `jpeg`, `gif`, `webp`, `bmp`, `ico`, `tiff`), substantially shrinking the dependency tree
+- **Upgraded parser dependencies** - `turbovault-parser` 1.4.1 → 1.5.0 and `turbovault-core` 1.4.1 → 1.5.0, plus transitive refreshes
+- **Removed outline auto-hide** - Dropped the logic that auto-hid the outline when a directory contained few files; outline visibility is now driven solely by user toggle/config
+- **Hardened rendering and TTY handling** - Tightened audit findings surfaced during PR #53 review across the CLI, table, and TUI rendering paths
 
 ## [0.5.11] - 2026-04-28
 

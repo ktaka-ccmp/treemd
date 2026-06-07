@@ -107,6 +107,7 @@ fn add_normal_mode(kb: &mut Keybindings) {
 
     // View
     bind(kb, Normal, "r", ToggleRawSource);
+    bind(kb, Normal, "M", ToggleMouseCapture);
     bind(kb, Normal, "t", ToggleThemePicker);
     bind(kb, Normal, "?", ToggleHelp);
 
@@ -265,11 +266,9 @@ fn add_interactive_table_mode(kb: &mut Keybindings) {
     bind(kb, InteractiveTable, "Up", InteractivePrevious);
 
     // Clipboard
-    bind(kb, InteractiveTable, "y", CopyContent);
-    bind(kb, InteractiveTable, "Y", CopyAnchor);
-
-    // View toggle
-    bind(kb, InteractiveTable, "r", ToggleRawSource);
+    bind(kb, InteractiveTable, "y", CopyTableCell);
+    bind(kb, InteractiveTable, "Y", CopyTableRow);
+    bind(kb, InteractiveTable, "r", CopyTableMarkdown);
 
     // Activate (follow link or edit cell)
     bind(kb, InteractiveTable, "Enter", InteractiveActivate);
@@ -536,6 +535,48 @@ mod tests {
                 make_key_event(KeyCode::Char('?'), KeyModifiers::NONE)
             ),
             Some(Action::ToggleHelp)
+        );
+    }
+
+    #[test]
+    fn test_default_table_mode_copy_bindings() {
+        // Regression: the action-dispatch refactor (2ca73a3) silently rebound
+        // table-mode y/Y/r to generic CopyContent/CopyAnchor/ToggleRawSource,
+        // breaking cell/row/markdown copy. These must map to the table actions.
+        let mut kb = default_keybindings();
+
+        assert_eq!(
+            kb.dispatch(
+                KeybindingMode::InteractiveTable,
+                make_key_event(KeyCode::Char('y'), KeyModifiers::NONE)
+            ),
+            Some(Action::CopyTableCell)
+        );
+        assert_eq!(
+            kb.dispatch(
+                KeybindingMode::InteractiveTable,
+                make_key_event(KeyCode::Char('Y'), KeyModifiers::SHIFT)
+            ),
+            Some(Action::CopyTableRow)
+        );
+        assert_eq!(
+            kb.dispatch(
+                KeybindingMode::InteractiveTable,
+                make_key_event(KeyCode::Char('r'), KeyModifiers::NONE)
+            ),
+            Some(Action::CopyTableMarkdown)
+        );
+    }
+
+    #[test]
+    fn test_default_mouse_capture_toggle_binding() {
+        let mut kb = default_keybindings();
+        assert_eq!(
+            kb.dispatch(
+                KeybindingMode::Normal,
+                make_key_event(KeyCode::Char('M'), KeyModifiers::SHIFT)
+            ),
+            Some(Action::ToggleMouseCapture)
         );
     }
 
